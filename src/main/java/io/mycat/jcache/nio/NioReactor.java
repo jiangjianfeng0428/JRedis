@@ -48,7 +48,12 @@ public class NioReactor extends Thread{
                         Connection conn = (Connection)key.attachment();
                         if(key.isReadable()){
                             logger.debug("receive read event.");
-                            conn.read();
+                            try{
+                                conn.read();
+                            }catch (Throwable e){
+                                logger.warn("[{}]: {}", this.name, e.getMessage());
+                                conn.close("program err: " + e.getMessage());
+                            }
                         }else if(key.isWritable()){
                             logger.debug("receive write event.");
                             conn.write();

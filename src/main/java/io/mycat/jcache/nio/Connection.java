@@ -2,6 +2,7 @@ package io.mycat.jcache.nio;
 
 import io.mycat.jcache.nio.buffer.ByteBufferQueue;
 import io.mycat.jcache.nio.handler.NioHandler;
+import io.mycat.jcache.server.Context;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,8 +40,8 @@ public class Connection {
      */
     public void register(Selector selector) throws IOException{
         this.processKey = this.channel.register(selector, SelectionKey.OP_READ, this);
-//        this.readBufQueue = new ByteBufferQueue();
-//        this.writeBufQueue
+        this.readBufQueue = new ByteBufferQueue(Context.getInstance().getByteBufferPool());
+        this.writeBufQueue = new ByteBufferQueue(Context.getInstance().getByteBufferPool());
         if(this.handler != null) {
             this.handler.onConnected(this);
         }

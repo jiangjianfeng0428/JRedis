@@ -37,9 +37,18 @@ public class NioAcceptor extends Thread{
 
     @Override
     public void run() {
+        try{
+            logger.info("server started at {}", serverChannel.getLocalAddress());
+        }catch (Throwable e){
+            // to do nothing
+        }
+
         while(true){
             try{
-                this.selector.select(500L);
+                if(this.selector.select(500L) == 0){
+                    continue;
+                }
+
                 Set<SelectionKey> keys = selector.selectedKeys();
                 try {
                     keys.forEach((key)->{
