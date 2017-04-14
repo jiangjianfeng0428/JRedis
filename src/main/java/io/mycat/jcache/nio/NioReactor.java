@@ -13,7 +13,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  * Created by jiangjf2 on 2017/4/11.
  */
 public class NioReactor extends Thread{
-    private Logger logger = LoggerFactory.getLogger(NioAcceptor.class);
+    private Logger logger = LoggerFactory.getLogger(NioReactor.class);
 
     private final String name;
     private final Selector selector;
@@ -56,7 +56,12 @@ public class NioReactor extends Thread{
                             }
                         }else if(key.isWritable()){
                             logger.debug("receive write event.");
-                            conn.write();
+                            try{
+                                conn.write();
+                            }catch (Throwable e){
+                                logger.warn("[{}]: {}", this.name, e.getMessage());
+                                conn.close("program err: " + e.getMessage());
+                            }
                         }
                     }else{
                         key.channel();

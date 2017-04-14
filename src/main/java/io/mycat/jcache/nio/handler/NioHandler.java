@@ -23,9 +23,9 @@ public abstract class NioHandler {
         }
     }
 
-    public void handle(Object obj){
+    public void handle(Connection conn, Object obj){
         if(this.handler != null){
-            this.handler.handle(obj);
+            this.handler.handle(conn, obj);
         }
     }
 

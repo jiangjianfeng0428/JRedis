@@ -1,6 +1,8 @@
 package io.mycat.jcache.nio;
 
+import io.mycat.jcache.nio.handler.DelimiterHandler;
 import io.mycat.jcache.nio.handler.RespHandler;
+import io.mycat.jcache.nio.handler.StringHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -11,6 +13,7 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.nio.charset.Charset;
 import java.util.Set;
 
 /**
@@ -76,7 +79,9 @@ public class NioAcceptor extends Thread{
             channel = serverChannel.accept();
             channel.configureBlocking(false);
             Connection conn = new Connection(channel);
-            conn.addHandler(new RespHandler());
+            conn.addHandler(new DelimiterHandler(new byte[]{0X0D, 0X0A}))
+                    .addHandler(new StringHandler(Charset.forName("utf-8")))
+                    .addHandler(new RespHandler());
             this.reactor.postRegister(conn);
         }catch (Throwable e){
             logger.warn("[{}]: {}", this.name, e.getMessage());

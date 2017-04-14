@@ -1,6 +1,7 @@
 package io.mycat.jcache.nio;
 
-import io.mycat.jcache.nio.buffer.ByteBufferQueue;
+import io.mycat.jcache.nio.buffer.ReadByteBufferQueue;
+import io.mycat.jcache.nio.buffer.WriteByteBufferQueue;
 import io.mycat.jcache.nio.handler.NioHandler;
 import io.mycat.jcache.server.Context;
 import org.slf4j.Logger;
@@ -20,8 +21,8 @@ public class Connection {
     private final SocketChannel channel;
     private SelectionKey processKey;
     private State state = State.CONNECTING;
-    private ByteBufferQueue readBufQueue;
-    private ByteBufferQueue writeBufQueue;
+    private ReadByteBufferQueue readBufQueue;
+    private WriteByteBufferQueue writeBufQueue;
     private NioHandler handler;
 
     public enum State{
@@ -40,38 +41,45 @@ public class Connection {
      */
     public void register(Selector selector) throws IOException{
         this.processKey = this.channel.register(selector, SelectionKey.OP_READ, this);
-        this.readBufQueue = new ByteBufferQueue(Context.getInstance().getByteBufferPool());
-        this.writeBufQueue = new ByteBufferQueue(Context.getInstance().getByteBufferPool());
+        this.readBufQueue = new ReadByteBufferQueue(Context.getInstance().getByteBufferPool());
+        this.writeBufQueue = new WriteByteBufferQueue(Context.getInstance().getByteBufferPool());
         if(this.handler != null) {
             this.handler.onConnected(this);
         }
     }
 
     public void read() throws IOException{
-        int size, total = 0;
-        do{
-            size = channel.read(this.readBufQueue.getWriteBuffer());
-            total += size;
-        }while(size > 0);
+        int size = this.readBufQueue.readFromChannel(this.channel);
 
         if(size == -1){
             close("client closed");
             return;
         }
 
-        if(total > 0 && this.handler != null){
-            this.handler.handle(readBufQueue);
+        if(size > 0 && this.handler != null){
+            logger.debug("read {} bytes from channel.", size);
+            this.handler.handle(this, readBufQueue);
         }
-
-        this.readBufQueue.compact();
     }
 
-    public void write(){
+    public void write() throws IOException{
+        int size = this.writeBufQueue.writeToChannel(this.channel);
+        logger.debug("write {} bytes to channel.", size);
 
+        if(this.writeBufQueue.hasMoreData()){
+            if ((processKey.isValid() && (processKey.interestOps() & SelectionKey.OP_WRITE) == 0)) {
+                enableWrite(false);
+            }
+        }else{
+            if ((processKey.isValid() && (processKey.interestOps() & SelectionKey.OP_WRITE) != 0)) {
+                disableWrite();
+            }
+        }
     }
 
     public void write(byte[] bytes){
-
+        this.writeBufQueue.readFromBytes(bytes);
+        enableWrite(true);
     }
 
     /**
@@ -115,6 +123,32 @@ public class Connection {
         if(this.handler != null){
             this.handler.onClosed(reason);
             this.handler = null;
+        }
+    }
+
+    private void disableWrite() {
+        try {
+            SelectionKey key = this.processKey;
+            key.interestOps(key.interestOps() & ~SelectionKey.OP_WRITE);
+        } catch (Exception e) {
+            logger.warn("can't disable write {}", e);
+        }
+
+    }
+
+    private void enableWrite(boolean wakeup) {
+        boolean needWakeup = false;
+        try {
+            SelectionKey key = this.processKey;
+            key.interestOps(key.interestOps() | SelectionKey.OP_WRITE);
+            needWakeup = true;
+        } catch (Exception e) {
+            logger.warn("can't enable write " + e);
+
+        }
+
+        if (needWakeup && wakeup) {
+            processKey.selector().wakeup();
         }
     }
 }
